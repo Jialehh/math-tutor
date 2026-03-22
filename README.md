@@ -42,13 +42,13 @@
 
 ## 界面预览
 
-!\[主界面]\(assets/screenshot-1.png null)
+![主界面](assets/screenshot-1.png)
 
-!\[输入题目]\(assets/screenshot-2.png null)
+![输入题目](assets/screenshot-2.png)
 
-!\[设置面板]\(assets/screenshot-3.png null)
+![设置面板](assets/screenshot-3.png)
 
-!\[学习过程]\(assets/screenshot-4.png null)
+![学习过程](assets/screenshot-4.png)
 
 ***
 
