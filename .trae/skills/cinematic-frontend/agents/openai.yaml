@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cinematic PV Frontend"
+  short_description: "Cinematic sci-fi UI rules with spring motion."
+  default_prompt: "Use $cinematic-pv-frontend to design and implement a cinematic dark sci-fi frontend with glassmorphism, kinetic typography, and spring-driven motion."
