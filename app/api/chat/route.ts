@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { getProvider } from '@/lib/providers';
 
 const SYSTEM_PROMPT = `你是一位专业的启发式数学/理科导师，擅长用苏格拉底式问答引导学生一步步理解题目，而非直接给出答案。
 
@@ -47,9 +47,150 @@ const SYSTEM_PROMPT = `你是一位专业的启发式数学/理科导师，擅�
   "conclusion": "综合总结（60-120字，回顾所有步骤，可用$...$包裹数学公式）"
 }`;
 
+interface Message {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+function buildOpenAIMessages(systemPrompt: string, userQuestion: string): Message[] {
+  return [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `请为以下题目制定分步教学计划：\n${userQuestion}` },
+  ];
+}
+
+function buildAnthropicMessages(systemPrompt: string, userQuestion: string): { system: string; messages: Message[] } {
+  return {
+    system: systemPrompt,
+    messages: [
+      { role: 'user', content: `请为以下题目制定分步教学计划：\n${userQuestion}` },
+    ],
+  };
+}
+
+function buildGeminiContents(systemPrompt: string, userQuestion: string): { system_instruction: { parts: { text: string }[] }; contents: { role: string; parts: { text: string }[] }[] } {
+  return {
+    system_instruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: `请为以下题目制定分步教学计划：\n${userQuestion}` }],
+      },
+    ],
+  };
+}
+
+async function callOpenAIFormat(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  messages: Message[],
+  authHeader: string,
+  authPrefix?: string
+): Promise<string> {
+  const url = `${baseUrl}/chat/completions`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  if (authPrefix) {
+    headers[authHeader] = `${authPrefix} ${apiKey}`;
+  } else {
+    headers[authHeader] = apiKey;
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`OpenAI format error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || '';
+}
+
+async function callAnthropicFormat(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  system: string,
+  messages: Message[],
+  maxTokens: number = 4096
+): Promise<string> {
+  const url = `${baseUrl}/messages`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      system,
+      messages,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Anthropic format error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return data.content[0]?.text || '';
+}
+
+async function callGeminiFormat(
+  baseUrl: string,
+  apiKey: string,
+  model: string,
+  systemInstruction: { parts: { text: string }[] },
+  contents: { role: string; parts: { text: string }[] }[]
+): Promise<string> {
+  const url = `${baseUrl}/models/${model}:generateContent?key=${apiKey}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      system_instruction: systemInstruction,
+      contents,
+      generationConfig: {
+        temperature: 0.7,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Gemini format error: ${response.status} - ${error}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts[0]?.text || '';
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { question, customApiKey, customBaseUrl, modelName } = await req.json();
+    const { question, customApiKey, customBaseUrl, modelName, selectedProvider } = await req.json();
 
     if (!question) {
       return NextResponse.json({ error: '题目不能为空' }, { status: 400 });
@@ -58,27 +199,50 @@ export async function POST(req: NextRequest) {
     if (!customApiKey || !customBaseUrl) {
       return NextResponse.json({ error: '请配置 API 地址和密钥' }, { status: 400 });
     }
-    
-    const clientToUse = new OpenAI({
-      apiKey: customApiKey,
-      baseURL: customBaseUrl,
-    });
 
-    const messages = [
-      { role: 'system' as const, content: SYSTEM_PROMPT },
-      {
-        role: 'user' as const,
-        content: `请为以下题目制定分步教学计划：\n${question}`,
-      },
-    ];
+    const provider = getProvider(selectedProvider || 'custom');
+    const modelToUse = modelName || provider?.defaultModel || 'gpt-5.2';
+    const format = provider?.format || 'openai';
 
-    const response = await clientToUse.chat.completions.create({
-      model: modelName || 'gpt-5.2',
-      messages,
-      temperature: 0.7,
-    });
+    let raw = '';
 
-    const raw = response.choices[0]?.message?.content || '{}';
+    switch (format) {
+      case 'anthropic':
+        const anthropicData = buildAnthropicMessages(SYSTEM_PROMPT, question);
+        raw = await callAnthropicFormat(
+          customBaseUrl,
+          customApiKey,
+          modelToUse,
+          anthropicData.system,
+          anthropicData.messages
+        );
+        break;
+
+      case 'gemini':
+        const geminiData = buildGeminiContents(SYSTEM_PROMPT, question);
+        raw = await callGeminiFormat(
+          customBaseUrl,
+          customApiKey,
+          modelToUse,
+          geminiData.system_instruction,
+          geminiData.contents
+        );
+        break;
+
+      case 'openai':
+      default:
+        const openAIMessages = buildOpenAIMessages(SYSTEM_PROMPT, question);
+        raw = await callOpenAIFormat(
+          customBaseUrl,
+          customApiKey,
+          modelToUse,
+          openAIMessages,
+          provider?.authHeader || 'Authorization',
+          provider?.authPrefix
+        );
+        break;
+    }
+
     const cleaned = raw.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     const sanitized = sanitizeLessonPlan(parsed);
@@ -87,15 +251,12 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('AI API Error:', error);
     return NextResponse.json(
-      { error: 'AI 服务暂时不可用，请稍后重试' },
+      { error: error instanceof Error ? error.message : 'AI 服务暂时不可用，请稍后重试' },
       { status: 500 }
     );
   }
 }
 
-// ─── Sanitization helpers ──────────────────────────────────────────────────
-
-/** Strip outer $...$ or $$...$$ from a pure-LaTeX field */
 function stripDollarSigns(str: string): string {
   if (!str) return str;
   const s = str.trim();
@@ -104,13 +265,11 @@ function stripDollarSigns(str: string): string {
   return s;
 }
 
-/** Strip inline $...$ from plain-text fields */
 function stripInlineMath(str: string): string {
   if (!str) return str;
   return str.replace(/\$([^$]+)\$/g, '$1');
 }
 
-/** Extract trailing $...$ from choice text into its math field */
 function extractMathFromText(text: string, existingMath: string): { text: string; math: string } {
   if (existingMath) return { text, math: stripDollarSigns(existingMath) };
   const match = text.match(/^(.*?)\s*(\$[^$]+\$)\s*$/);
@@ -133,12 +292,9 @@ type Round = {
 function sanitizeLessonPlan(data: Record<string, unknown>) {
   if (!data) return data;
 
-  // Top-level fields
   if (typeof data.formula === 'string') data.formula = stripDollarSigns(data.formula);
   if (typeof data.intro === 'string') data.intro = stripInlineMath(data.intro);
-  // conclusion: keep $...$ so MixedText can render inline math
 
-  // Rounds
   if (Array.isArray(data.rounds)) {
     data.rounds = (data.rounds as Round[]).map((r) => {
       const sanitizedRound: Round = { ...r };
@@ -146,7 +302,6 @@ function sanitizeLessonPlan(data: Record<string, unknown>) {
       if (typeof r.formula === 'string') sanitizedRound.formula = stripDollarSigns(r.formula);
       if (typeof r.guidance === 'string') sanitizedRound.guidance = stripInlineMath(r.guidance);
       if (typeof r.question === 'string') sanitizedRound.question = stripInlineMath(r.question);
-      // feedback_correct / feedback_wrong: keep $...$ for MixedText
 
       if (Array.isArray(r.choices)) {
         sanitizedRound.choices = r.choices.map((c) => {

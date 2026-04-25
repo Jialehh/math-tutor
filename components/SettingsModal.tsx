@@ -4,29 +4,12 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings, X, Server, Key, User, Link as LinkIcon, Cpu, ChevronDown, Building2 } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import { providers, getProvider } from '@/lib/providers';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
-
-interface Provider {
-  id: string;
-  name: string;
-  baseUrl: string;
-  apiKeyPrefix?: string;
-}
-
-const providers: Provider[] = [
-  { id: 'openai', name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', apiKeyPrefix: 'sk-' },
-  { id: 'anthropic', name: 'Anthropic', baseUrl: 'https://api.anthropic.com', apiKeyPrefix: 'sk-ant-' },
-  { id: 'google', name: 'Google (Gemini)', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
-  { id: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', apiKeyPrefix: 'sk-' },
-  { id: 'xai', name: 'X.AI (Grok)', baseUrl: 'https://api.x.ai/v1', apiKeyPrefix: 'xai-' },
-  { id: 'siliconflow', name: 'SiliconFlow', baseUrl: 'https://api.siliconflow.cn/v1', apiKeyPrefix: 'sk-' },
-  { id: 'minimax', name: 'MiniMax', baseUrl: 'https://api.minimax.chat/v1', apiKeyPrefix: 'eyJhbG' },
-  { id: 'custom', name: '自定义', baseUrl: '' },
-];
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const { theme } = useTheme();
@@ -71,7 +54,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     onClose();
   };
 
-  const currentProvider = providers.find(p => p.id === selectedProvider);
+  const currentProvider = getProvider(selectedProvider);
 
   return (
     <AnimatePresence>
@@ -214,25 +197,23 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     />
                   </div>
 
-                  {selectedProvider === 'custom' && (
-                    <div className="space-y-2">
-                      <label className={`text-xs font-mono flex items-center gap-2 ${isDark ? 'text-cyan-400/80' : 'text-purple-600/80'}`}>
-                        <Cpu className="w-3.5 h-3.5" />
-                        模型名称
-                      </label>
-                      <input
-                        type="text"
-                        value={modelName}
-                        onChange={(e) => setModelName(e.target.value)}
-                        placeholder="例如：gpt-5.2、gemini-2.0-flash"
-                        className={`w-full px-4 py-2.5 rounded-xl border text-sm font-sans transition-all focus:outline-none ${
-                          isDark
-                            ? 'bg-black/50 border-cyan-500/30 focus:border-cyan-400 text-gray-200 placeholder:text-gray-600 focus:shadow-[0_0_15px_rgba(0,255,255,0.15)]'
-                            : 'bg-white/50 border-purple-300/50 focus:border-purple-400 text-slate-800 placeholder:text-slate-400 focus:shadow-[0_0_15px_rgba(168,85,247,0.15)]'
-                        }`}
-                      />
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <label className={`text-xs font-mono flex items-center gap-2 ${isDark ? 'text-cyan-400/80' : 'text-purple-600/80'}`}>
+                      <Cpu className="w-3.5 h-3.5" />
+                      模型名称
+                    </label>
+                    <input
+                      type="text"
+                      value={modelName}
+                      onChange={(e) => setModelName(e.target.value)}
+                      placeholder={currentProvider?.defaultModel || '例如：gpt-5.2、gemini-2.0-flash'}
+                      className={`w-full px-4 py-2.5 rounded-xl border text-sm font-sans transition-all focus:outline-none ${
+                        isDark
+                          ? 'bg-black/50 border-cyan-500/30 focus:border-cyan-400 text-gray-200 placeholder:text-gray-600 focus:shadow-[0_0_15px_rgba(0,255,255,0.15)]'
+                          : 'bg-white/50 border-purple-300/50 focus:border-purple-400 text-slate-800 placeholder:text-slate-400 focus:shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
 

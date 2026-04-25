@@ -2,9 +2,9 @@
   "name": "math-tutor",
   "version": "0.1.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 40341",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 40341",
     "lint": "eslint .",
     "clean": "next clean"
   },
