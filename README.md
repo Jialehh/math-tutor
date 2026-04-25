@@ -2,7 +2,7 @@
 
 一个基于 AI 的智能数学/理科教学助手，采用苏格拉底式问答法引导学生逐步理解题目，而非直接给出答案。通过启发式提问和分步引导，帮助学生真正掌握解题思路。
 
-[在线体验](http://math.lunarmc.cn/) | [Bilibili 教程](https://space.bilibili.com/694979371)
+[在线体验](http://math.lunarmc.cn/) | [Bilibili 教程](https://www.bilibili.com/video/BV1a8oSBNEUN/)
 
 ***
 
