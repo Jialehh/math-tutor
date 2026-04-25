@@ -97,7 +97,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/math-tutor.git
+git clone https://github.com/jialehh/math-tutor.git
 cd math-tutor
 
 # 安装依赖
